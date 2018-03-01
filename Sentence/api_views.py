@@ -22,7 +22,9 @@ class SentenceView(View):
             "process": list
         }, {
             "value": 'tags',
-            "process": Tag.list_to_o_tag_set
+            "default": True,
+            "default_value": [],
+            "process": Tag.list_to_o_tag_list
         }])
     @require_login
     def post(request):
@@ -56,7 +58,7 @@ class SentenceView(View):
 
     @staticmethod
     @require_json
-    @require_put(['sid', {"value": 'tags', "process": Tag.list_to_o_tag_set}])
+    @require_put(['sid', {"value": 'tags', "process": Tag.list_to_o_tag_list}])
     @require_login
     def put(request):
         sid = request.d.sid

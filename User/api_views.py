@@ -21,7 +21,6 @@ class UserView(View):
             return error_response(ret)
         token, dict_ = ret.body
         dict_['token'] = token
-        dict_['avatar'] = o_user.get_avatar_url()
         return dict_
 
     @staticmethod
@@ -127,8 +126,8 @@ class TokenView(View):
     @staticmethod
     @require_json
     @require_post(['username', 'password'])
-    def get(request):
-        """ GET /api/user/token
+    def post(request):
+        """ POST /api/user/token
 
         登录获取token
         """

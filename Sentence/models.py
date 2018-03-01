@@ -49,9 +49,10 @@ class Sentence(models.Model):
                 sentence=sentence,
                 author=author,
                 reference=reference,
-                tags=tags,
                 owner=owner,
             )
+            o_sentence.save()
+            o_sentence.tags.add(*tags)
             o_sentence.save()
         except Exception as err:
             deprint(str(err))
@@ -85,7 +86,7 @@ class Sentence(models.Model):
         return Ret(o_sentence)
 
     def union_tags(self, tags):
-        self.tags.union(tags)
+        self.tags.add(*tags)
 
 
 class Tag(models.Model):
@@ -135,16 +136,16 @@ class Tag(models.Model):
         return Ret(o_tag)
 
     @classmethod
-    def list_to_o_tag_set(cls, tags):
+    def list_to_o_tag_list(cls, tags):
+        tag_list = []
         if not isinstance(tags, list):
-            return Ret(Error.REQUIRE_LIST, append_msg='，参数tags错误')
-        tag_set = set()
+            return []
         for i, tid in tags:
             ret = cls.get_tag_by_id(tid)
             if ret.body is not Error.OK:
                 continue
-            tag_set.add(ret.body)
-        return Ret()
+            tag_list.append(ret.body)
+        return tag_list
 
     @classmethod
     def get_tags(cls, page, count):
