@@ -20,9 +20,13 @@ class Sentence(models.Model):
     )
     author = models.CharField(
         max_length=L['author'],
+        default=None,
+        null=True,
     )
     reference = models.CharField(
         max_length=L['reference'],
+        default=None,
+        null=True,
     )
     tags = models.ManyToManyField(
         'Tag',
@@ -71,10 +75,25 @@ class Sentence(models.Model):
         )
 
     @classmethod
-    def get_random_photo(cls):
+    def get_random_sentence(cls, max_length, consider_author, tags):
         sentences = cls.objects.all()
-        index = random.randint(0, len(sentences) - 1)
-        return sentences[index].to_dict()
+        filtered_sentences = []
+        for o_sentence in sentences:
+            satisfied = True
+            for o_tag in tags:
+                if o_tag not in o_sentence.tags:
+                    satisfied = False
+                    break
+            if not satisfied:
+                continue
+            if consider_author:
+                if len(o_sentence.author) + len(o_sentence.sentence) < max_length or max_length == 0:
+                    filtered_sentences.append(o_sentence)
+            else:
+                if len(o_sentence.sentence) < max_length or max_length == 0:
+                    filtered_sentences.append(o_sentence)
+        index = random.randint(0, len(filtered_sentences) - 1)
+        return filtered_sentences[index].to_dict()
 
     @classmethod
     def get_sentence_by_id(cls, sid):

@@ -8,15 +8,33 @@ from Sentence.models import Sentence, Tag
 
 class SentenceView(View):
     @staticmethod
-    @require_get()
+    @require_get([{
+        "value": 'max_length',
+        "default": True,
+        "default_value": 0,
+        "process": int,
+    }, {
+        "value": 'consider_author',
+        "default": True,
+        "default_value": 0,
+        "process": bool,
+    }, {
+        "value": 'tags',
+        "default": True,
+        "default_value": [],
+        "process": Tag.list_to_o_tag_list,
+    }])
     def get(request):
-        return response()
+        max_length = request.d.max_length
+        consider_author = request.d.consider_author
+        tags = request.d.tags
+        return response(body=Sentence.get_random_sentence(max_length, consider_author, tags))
 
     @staticmethod
     @require_json
     @require_post([
-        'author',
-        'reference',
+        ('author', None, ''),
+        ('reference', None, ''),
         {
             "value": 'sentences',
             "process": list
