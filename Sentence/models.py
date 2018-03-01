@@ -1,3 +1,5 @@
+import random
+
 from django.db import models
 
 from Base.common import deprint
@@ -8,12 +10,13 @@ from Base.response import Ret
 
 class Sentence(models.Model):
     L = {
-        'sentence': 512,
+        'sentence': 255,
         'author': 32,
         'reference': 64,
     }
     sentence = models.CharField(
         max_length=L['sentence'],
+        unique=True,
     )
     author = models.CharField(
         max_length=L['author'],
@@ -28,7 +31,9 @@ class Sentence(models.Model):
     owner = models.ForeignKey(
         'User.User',
         on_delete=models.SET_NULL,
+        null=True,
     )
+    FIELD_LIST = ['sentence', 'author', 'reference', 'tags', 'owner']
 
     @classmethod
     def _validate(cls, d):
@@ -62,8 +67,25 @@ class Sentence(models.Model):
             author=self.author,
             reference=self.reference,
             tags=tag_list,
-            owner=self.owner.to_dict() if self.owner else None
         )
+
+    @classmethod
+    def get_random_photo(cls):
+        sentences = cls.objects.all()
+        index = random.randint(0, len(sentences) - 1)
+        return sentences[index].to_dict()
+
+    @classmethod
+    def get_sentence_by_id(cls, sid):
+        try:
+            o_sentence = cls.objects.get(pk=sid)
+        except cls.DoesNotExist as err:
+            deprint(str(err))
+            return Ret(Error.NOT_FOUND_SENTENCE)
+        return Ret(o_sentence)
+
+    def union_tags(self, tags):
+        self.tags.union(tags)
 
 
 class Tag(models.Model):
@@ -71,10 +93,18 @@ class Tag(models.Model):
     L = {
         'tag': 10,
     }
+    MIN_L = {
+        'tag': 1,
+    }
     tag = models.CharField(
         max_length=L['tag'],
         unique=True,
     )
+    FIELD_LIST = ['tag']
+
+    @classmethod
+    def _validate(cls, d):
+        return field_validator(d, cls)
 
     def to_dict(self):
         return dict(
@@ -93,6 +123,9 @@ class Tag(models.Model):
 
     @classmethod
     def create(cls, tag):
+        ret = cls._validate(locals())
+        if ret.error is not Error.OK:
+            return ret
         try:
             o_tag = cls(tag=tag)
             o_tag.save()
@@ -100,3 +133,24 @@ class Tag(models.Model):
             deprint(str(err))
             return Ret(Error.ERROR_CREATE_TAG)
         return Ret(o_tag)
+
+    @classmethod
+    def list_to_o_tag_set(cls, tags):
+        if not isinstance(tags, list):
+            return Ret(Error.REQUIRE_LIST, append_msg='，参数tags错误')
+        tag_set = set()
+        for i, tid in tags:
+            ret = cls.get_tag_by_id(tid)
+            if ret.body is not Error.OK:
+                continue
+            tag_set.add(ret.body)
+        return Ret()
+
+    @classmethod
+    def get_tags(cls, page, count):
+        tags = Tag.objects.all()
+        if page >= 0 and count > 0:
+            start = page * count
+            end = start + count
+            tags = tags[start: end]
+        return Ret(tags)

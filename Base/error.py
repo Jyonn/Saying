@@ -16,7 +16,7 @@ class E:
 
 class Error:
     OK = E("没有错误")
-    ERROR_NOT_FOUND = E("不存在的错误")
+    NOT_FOUND_ERROR = E("不存在的错误")
     REQUIRE_PARAM = E("缺少参数")
     REQUIRE_JSON = E("需要JSON数据")
     REQUIRE_LOGIN = E("需要登录")
@@ -46,6 +46,9 @@ class Error:
     ERROR_CREATE_SENTENCE = E("创建句子错误")
     NOT_FOUND_TAG = E("不存在的标签")
     ERROR_CREATE_TAG = E("创建标签错误")
+    NOT_FOUND_SENTENCE = E("不存在的句子")
+    NOT_BELONG = E("不是你的句子")
+    REQUIRE_LIST = E("需要列表")
 
     @classmethod
     def get_error_dict(cls):

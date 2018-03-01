@@ -8,8 +8,6 @@ from Base.decorator import require_json, require_post, require_login, require_ge
     require_put, require_root
 from Base.error import Error
 from Base.jtoken import jwt_e
-from Base.policy import get_avatar_policy
-from Base.qn import get_upload_token, qiniu_auth_callback
 from Base.response import response, error_response
 
 from User.models import User
@@ -145,48 +143,3 @@ class TokenView(View):
             return error_response(Error.STRANGE)
 
         return response(body=UserView.get_token_info(o_user))
-
-
-class AvatarView(View):
-    @staticmethod
-    @require_get(['filename'])
-    @require_login
-    def get(request):
-        """ GET /api/user/avatar
-
-        获取七牛上传token
-        """
-        o_user = request.user
-        filename = request.d.filename
-
-        if not isinstance(o_user, User):
-            return error_response(Error.STRANGE)
-
-        import datetime
-        crt_time = datetime.datetime.now().timestamp()
-        key = 'user/%s/avatar/%s/%s' % (o_user.pk, crt_time, filename)
-        qn_token, key = get_upload_token(key, get_avatar_policy(o_user.pk))
-        return response(body=dict(upload_token=qn_token, key=key))
-
-    @staticmethod
-    @require_json
-    @require_post(['key', 'user_id'])
-    def post(request):
-        """ POST /api/user/avatar
-
-        七牛上传用户头像回调函数
-        """
-        ret = qiniu_auth_callback(request)
-        if ret.error is not Error.OK:
-            return error_response(ret)
-
-        key = request.d.key
-        user_id = request.d.user_id
-        ret = User.get_user_by_id(user_id)
-        if ret.error is not Error.OK:
-            return error_response(ret)
-        o_user = ret.body
-        if not isinstance(o_user, User):
-            return error_response(Error.STRANGE)
-        o_user.modify_avatar(key)
-        return response(body=o_user.to_dict())

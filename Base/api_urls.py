@@ -1,13 +1,11 @@
-""" Adel Liu 180226
+""" Adel Liu 180301
 
 base子路由
 """
 from django.urls import path
 
-from Base.api_views import ErrorView, RegionView
+from Base.api_views import ErrorView
 
 urlpatterns = [
     path('errors', ErrorView.as_view()),
-    path('regions', RegionView.as_view()),
-    # path('captcha', get_captcha),
 ]
