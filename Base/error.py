@@ -49,6 +49,7 @@ class Error:
     NOT_FOUND_SENTENCE = E("不存在的句子")
     NOT_BELONG = E("不是你的句子")
     REQUIRE_LIST = E("需要列表")
+    NO_MATCHED_SENTENCE = E("找不到匹配的句子")
 
     @classmethod
     def get_error_dict(cls):

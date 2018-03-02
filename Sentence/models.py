@@ -92,8 +92,10 @@ class Sentence(models.Model):
             else:
                 if len(o_sentence.sentence) < max_length or max_length == 0:
                     filtered_sentences.append(o_sentence)
+        if not filtered_sentences:
+            return Ret(Error.NO_MATCHED_SENTENCE)
         index = random.randint(0, len(filtered_sentences) - 1)
-        return filtered_sentences[index].to_dict()
+        return Ret(filtered_sentences[index])
 
     @classmethod
     def get_sentence_by_id(cls, sid):

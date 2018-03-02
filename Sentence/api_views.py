@@ -28,7 +28,13 @@ class SentenceView(View):
         max_length = request.d.max_length
         consider_author = request.d.consider_author
         tags = request.d.tags
-        return response(body=Sentence.get_random_sentence(max_length, consider_author, tags))
+        ret = Sentence.get_random_sentence(max_length, consider_author, tags)
+        if ret.error is not Error.OK:
+            return error_response(ret)
+        o_sentence = ret.body
+        if not isinstance(o_sentence, Sentence):
+            return error_response(Error.STRANGE)
+        return response(body=o_sentence.to_dict())
 
     @staticmethod
     @require_json
