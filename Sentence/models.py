@@ -75,8 +75,12 @@ class Sentence(models.Model):
         )
 
     @classmethod
-    def get_random_sentence(cls, max_length, consider_author, tags):
+    def get_random_sentence(cls, author, reference, max_length, consider_author, tags):
         sentences = cls.objects.all()
+        if author is not None:
+            sentences = sentences.filter(author__contains=author)
+        if reference is not None:
+            sentences = sentences.filter(reference__contains=reference)
         filtered_sentences = []
         for o_sentence in sentences:
             satisfied = True

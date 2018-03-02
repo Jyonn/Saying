@@ -23,12 +23,23 @@ class SentenceView(View):
         "default": True,
         "default_value": [],
         "process": Tag.list_to_o_tag_list,
+    }, {
+        "value": 'author',
+        "default": True,
+        "default_value": None,
+    }, {
+        "value": 'reference',
+        "default": True,
+        "default_value": None,
     }])
     def get(request):
         max_length = request.d.max_length
         consider_author = request.d.consider_author
         tags = request.d.tags
-        ret = Sentence.get_random_sentence(max_length, consider_author, tags)
+        author = request.d.author
+        reference = request.d.reference
+
+        ret = Sentence.get_random_sentence(author, reference, max_length, consider_author, tags)
         if ret.error is not Error.OK:
             return error_response(ret)
         o_sentence = ret.body
