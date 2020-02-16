@@ -1,30 +1,31 @@
 import random
 
-from django.db import models
+from SmartDjango import models, E
+from smartify import P
 
-from Base.common import deprint
-from Base.decorator import field_validator
-from Base.error import Error
-from Base.response import Ret
+
+@E.register()
+class SentenceError:
+    CREATE_SENTENCE = E("创建句子错误")
+    NO_MATCHED_SENTENCE = E("找不到匹配的句子")
+    NOT_FOUND_SENTENCE = E("不存在的句子")
+    NOT_FOUND_TAG = E("不存在的标签")
+    CREATE_TAG = E("创建标签错误")
+    NOT_BELONG = E("不是你的句子")
 
 
 class Sentence(models.Model):
-    L = {
-        'sentence': 255,
-        'author': 32,
-        'reference': 64,
-    }
     sentence = models.CharField(
-        max_length=L['sentence'],
+        max_length=255,
         unique=True,
     )
     author = models.CharField(
-        max_length=L['author'],
+        max_length=32,
         default=None,
         null=True,
     )
     reference = models.CharField(
-        max_length=L['reference'],
+        max_length=64,
         default=None,
         null=True,
     )
@@ -37,50 +38,36 @@ class Sentence(models.Model):
         on_delete=models.SET_NULL,
         null=True,
     )
-    FIELD_LIST = ['sentence', 'author', 'reference', 'tags', 'owner']
-
-    @classmethod
-    def _validate(cls, d):
-        return field_validator(d, cls)
 
     @classmethod
     def create(cls, sentence, author, reference, tags, owner):
-        ret = cls._validate(locals())
-        if ret.error is not Error.OK:
-            return ret
+        cls.validator(locals())
+
         try:
-            o_sentence = cls(
+            sentence = cls(
                 sentence=sentence,
                 author=author,
                 reference=reference,
                 owner=owner,
             )
-            o_sentence.save()
-            o_sentence.tags.add(*tags)
-            o_sentence.save()
+            sentence.save()
+            sentence.tags.add(*tags)
+            sentence.save()
         except Exception as err:
-            deprint(str(err))
-            return Ret(Error.ERROR_CREATE_SENTENCE)
-        return Ret(o_sentence)
+            raise SentenceError.ERROR_CREATE_SENTENCE
+        return sentence
 
-    def to_dict(self):
+    def readable_tags(self):
         tags = self.tags.all()
-        tag_list = [o_tag.to_dict() for o_tag in tags]
-        return dict(
-            sid=self.pk,
-            sentence=self.sentence,
-            author=self.author,
-            reference=self.reference,
-            tags=tag_list,
-        )
+        return [tag.d() for tag in tags]
+
+    def d(self):
+        return self.dictor('pk->sid', 'sentence', 'author', 'reference', 'tags')
 
     @classmethod
     def get_random_sentence(cls, author, reference, max_length, consider_author, tags):
-        sentences = cls.objects.all()
-        if author is not None:
-            sentences = sentences.filter(author__contains=author)
-        if reference is not None:
-            sentences = sentences.filter(reference__contains=reference)
+        sentences = cls.objects.search(author=author, reference=reference)
+
         filtered_sentences = []
         for o_sentence in sentences:
             satisfied = True
@@ -97,18 +84,17 @@ class Sentence(models.Model):
                 if len(o_sentence.sentence) < max_length or max_length == 0:
                     filtered_sentences.append(o_sentence)
         if not filtered_sentences:
-            return Ret(Error.NO_MATCHED_SENTENCE)
+            raise SentenceError.NO_MATCHED_SENTENCE
         index = random.randint(0, len(filtered_sentences) - 1)
-        return Ret(filtered_sentences[index])
+        return filtered_sentences[index]
 
     @classmethod
     def get_sentence_by_id(cls, sid):
         try:
-            o_sentence = cls.objects.get(pk=sid)
-        except cls.DoesNotExist as err:
-            deprint(str(err))
-            return Ret(Error.NOT_FOUND_SENTENCE)
-        return Ret(o_sentence)
+            sentence = cls.objects.get(pk=sid)
+        except cls.DoesNotExist:
+            raise SentenceError.NOT_FOUND_SENTENCE
+        return sentence
 
     def union_tags(self, tags):
         self.tags.add(*tags)
@@ -128,48 +114,38 @@ class Tag(models.Model):
     )
     FIELD_LIST = ['tag']
 
-    @classmethod
-    def _validate(cls, d):
-        return field_validator(d, cls)
-
-    def to_dict(self):
-        return dict(
-            tid=self.pk,
-            tag=self.tag,
-        )
+    def d(self):
+        return self.dictor('pk->tid', 'tag')
 
     @classmethod
     def get_tag_by_id(cls, tid):
         try:
-            o_tag = Tag.objects.get(pk=tid)
-        except cls.DoesNotExist as err:
-            deprint(str(err))
-            return Ret(Error.NOT_FOUND_TAG)
-        return Ret(o_tag)
+            tag = Tag.objects.get(pk=tid)
+        except cls.DoesNotExist:
+            raise SentenceError.NOT_FOUND_TAG
+        return tag
 
     @classmethod
     def create(cls, tag):
-        ret = cls._validate(locals())
-        if ret.error is not Error.OK:
-            return ret
+        cls.validator(locals())
+
         try:
-            o_tag = cls(tag=tag)
-            o_tag.save()
+            tag = cls(tag=tag)
+            tag.save()
         except Exception as err:
-            deprint(str(err))
-            return Ret(Error.ERROR_CREATE_TAG)
-        return Ret(o_tag)
+            raise SentenceError.ERROR_CREATE_TAG
+        return tag
 
     @classmethod
-    def list_to_o_tag_list(cls, tags):
+    def list_to_tag_list(cls, tags):
         tag_list = []
         if not isinstance(tags, list):
             return []
         for i, tid in tags:
-            ret = cls.get_tag_by_id(tid)
-            if ret.body is not Error.OK:
-                continue
-            tag_list.append(ret.body)
+            try:
+                tag_list.append(cls.get_tag_by_id(tid))
+            except Exception:
+                pass
         return tag_list
 
     @classmethod
@@ -179,4 +155,12 @@ class Tag(models.Model):
             start = page * count
             end = start + count
             tags = tags[start: end]
-        return Ret(tags)
+        return tags
+
+
+class SentenceP:
+    sentence, author, reference= Sentence.get_params(
+        'sentence', 'author', 'reference')
+
+    tags = P('tags', '链接列表')
+    tags.process(Tag.list_to_tag_list)

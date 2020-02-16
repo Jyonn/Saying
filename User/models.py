@@ -5,13 +5,20 @@
 import re
 import string
 
-from django.db import models
+from SmartDjango import models, E
 from django.utils.crypto import get_random_string
 
-from Base.common import deprint
-from Base.decorator import field_validator
-from Base.error import Error
-from Base.response import Ret
+
+@E.register()
+class UserError:
+    PASSWORD_CHANGED = E("密码已改变，需要重新获取token")
+    INVALID_PASSWORD = E("密码只能包含字母数字以及“!@#$%^&*()_+-=,.?;:”")
+    INVALID_USERNAME_FIRST = E("用户名首字符只能是字母")
+    INVALID_USERNAME = E("用户名只能包含字母数字和下划线")
+    USERNAME_EXIST = E("已存在的用户名")
+    CREATE_USER = E("存储用户错误")
+    PASSWORD = E("错误的用户名或密码")
+    NOT_FOUND_USER = E("不存在的用户")
 
 
 class User(models.Model):
@@ -20,30 +27,21 @@ class User(models.Model):
     根超级用户id=1
     """
     ROOT_ID = 1
-    L = {
-        'username': 32,
-        'password': 32,
-        'salt': 10,
-        'nickname': 10,
-        'avatar': 1024,
-        'phone': 20,
-    }
-    MIN_L = {
-        'username': 3,
-        'password': 6,
-    }
+
     username = models.CharField(
-        max_length=L['username'],
+        max_length=32,
+        min_length=3,
         unique=True,
         blank=True,
         null=True,
         default=None,
     )
     password = models.CharField(
-        max_length=L['password'],
+        max_length=32,
+        min_length=6,
     )
     salt = models.CharField(
-        max_length=L['salt'],
+        max_length=10,
         default=None,
     )
     pwd_change_time = models.FloatField(
@@ -51,30 +49,22 @@ class User(models.Model):
         blank=True,
         default=0,
     )
-    FIELD_LIST = ['username', 'password']
 
     @staticmethod
     def _valid_username(username):
         """验证用户名合法"""
         if username[0] not in string.ascii_lowercase + string.ascii_uppercase:
-            return Ret(Error.INVALID_USERNAME_FIRST)
+            raise UserError.INVALID_USERNAME_FIRST
         valid_chars = '^[A-Za-z0-9_]{3,32}$'
         if re.match(valid_chars, username) is None:
-            return Ret(Error.INVALID_USERNAME)
-        return Ret()
+            raise UserError.INVALID_USERNAME
 
     @staticmethod
     def _valid_password(password):
         """验证密码合法"""
         valid_chars = '^[A-Za-z0-9!@#$%^&*()_+-=,.?;:]{6,16}$'
         if re.match(valid_chars, password) is None:
-            return Ret(Error.INVALID_PASSWORD)
-        return Ret()
-
-    @classmethod
-    def _validate(cls, dict_):
-        """验证传入参数是否合法"""
-        return field_validator(dict_, cls)
+            raise UserError.INVALID_PASSWORD
 
     @staticmethod
     def hash_password(raw_password, salt=None):
@@ -84,6 +74,14 @@ class User(models.Model):
         return salt, hash_password
 
     @classmethod
+    def exist_with_username(cls, username):
+        try:
+            cls.objects.get(username=username)
+        except cls.DoesNotExist:
+            return
+        raise UserError.USERNAME_EXIST
+
+    @classmethod
     def create(cls, username, password):
         """ 创建用户
 
@@ -91,82 +89,80 @@ class User(models.Model):
         :param password: 密码
         :return: Ret对象，错误返回错误代码，成功返回用户对象
         """
-        ret = cls._validate(locals())
-        if ret.error is not Error.OK:
-            return ret
+        cls.validator(locals())
 
         salt, hashed_password = User.hash_password(password)
-        ret = User.get_user_by_username(username)
-        if ret.error is Error.OK:
-            return Ret(Error.USERNAME_EXIST)
+
+        User.exist_with_username(username)
+
         try:
-            o_user = cls(
+            user = cls(
                 username=username,
                 password=hashed_password,
                 salt=salt,
             )
-            o_user.save()
-        except ValueError as err:
-            deprint(str(err))
-            return Ret(Error.ERROR_CREATE_USER)
-        return Ret(o_user)
+            user.save()
+        except Exception:
+            raise UserError.CREATE_USER
+        return user
 
     def change_password(self, password, old_password):
         """修改密码"""
-        ret = self._validate(locals())
-        if ret.error is not Error.OK:
-            return ret
+        self.validator(locals())
+
         if self.password != User._hash(old_password):
-            return Ret(Error.ERROR_PASSWORD)
+            raise UserError.PASSWORD
         self.salt, self.password = User.hash_password(password)
         import datetime
         self.pwd_change_time = datetime.datetime.now().timestamp()
         self.save()
-        return Ret()
 
     @staticmethod
     def _hash(s):
-        from Base.common import md5
-        return md5(s)
+        import hashlib
+        md5_ = hashlib.md5()
+        md5_.update(s.encode())
+        return md5_.hexdigest()
 
     @staticmethod
     def get_user_by_username(username):
         """根据用户名获取用户对象"""
         try:
-            o_user = User.objects.get(username=username)
-        except User.DoesNotExist as err:
-            deprint(str(err))
-            return Ret(Error.NOT_FOUND_USER)
-        return Ret(o_user)
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            raise UserError.NOT_FOUND_USER
+        return user
 
     @staticmethod
     def get_user_by_id(user_id):
         """根据用户ID获取用户对象"""
         try:
-            o_user = User.objects.get(pk=user_id)
-        except User.DoesNotExist as err:
-            deprint(str(err))
-            return Ret(Error.NOT_FOUND_USER)
-        return Ret(o_user)
+            user = User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            raise UserError.NOT_FOUND_USER
+        return user
 
-    @staticmethod
-    def authenticate(username, password):
+    @classmethod
+    def authenticate(cls, username, password):
         """验证用户名和密码是否匹配"""
-        ret = User._validate(locals())
-        if ret.error is not Error.OK:
-            return ret
-        try:
-            o_user = User.objects.get(username=username)
-        except User.DoesNotExist as err:
-            deprint(str(err))
-            return Ret(Error.NOT_FOUND_USER)
-        salt, hashed_password = User.hash_password(password, o_user.salt)
-        if hashed_password == o_user.password:
-            return Ret(o_user)
-        return Ret(Error.ERROR_PASSWORD)
+        cls.validator(locals())
 
-    def to_dict(self):
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist as err:
+            raise UserError.NOT_FOUND_USER
+
+        salt, hashed_password = User.hash_password(password, user.salt)
+        if hashed_password == user.password:
+            return user
+        raise UserError.PASSWORD
+
+    def d(self):
         return dict(
             uid=self.pk,
             username=self.username,
         )
+
+
+class UserP:
+    username, password = User.get_params('username', 'password')

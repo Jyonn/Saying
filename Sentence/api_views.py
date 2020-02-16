@@ -1,145 +1,84 @@
+from SmartDjango import Analyse, P
 from django.views import View
 
-from Base.decorator import require_post, require_json, require_login, require_put, require_get
-from Base.error import Error
-from Base.response import response, error_response
-from Sentence.models import Sentence, Tag
+from Base.auth import Auth
+from Sentence.models import Sentence, Tag, SentenceP, SentenceError
 
 
 class SentenceView(View):
     @staticmethod
-    @require_get([{
-        "value": 'max_length',
-        "default": True,
-        "default_value": 0,
-        "process": int,
-    }, {
-        "value": 'consider_author',
-        "default": True,
-        "default_value": 0,
-        "process": bool,
-    }, {
-        "value": 'tags',
-        "default": True,
-        "default_value": [],
-        "process": Tag.list_to_o_tag_list,
-    }, {
-        "value": 'author',
-        "default": True,
-        "default_value": None,
-    }, {
-        "value": 'reference',
-        "default": True,
-        "default_value": None,
-    }])
+    @Analyse.r(q=[
+        P('max_length', '最大长度').default(0).process(int),
+        P('consider_author', '长度考虑作者名').default(0).process(bool),
+        SentenceP.tags,
+        SentenceP.author,
+        SentenceP.reference,
+    ])
     def get(request):
-        max_length = request.d.max_length
-        consider_author = request.d.consider_author
-        tags = request.d.tags
-        author = request.d.author
-        reference = request.d.reference
-
-        ret = Sentence.get_random_sentence(author, reference, max_length, consider_author, tags)
-        if ret.error is not Error.OK:
-            return error_response(ret)
-        o_sentence = ret.body
-        if not isinstance(o_sentence, Sentence):
-            return error_response(Error.STRANGE)
-        return response(body=o_sentence.to_dict())
+        sentence = Sentence.get_random_sentence(**request.d.dict())
+        return sentence.d()
 
     @staticmethod
-    @require_json
-    @require_post([
-        ('author', None, ''),
-        ('reference', None, ''),
-        {
-            "value": 'sentences',
-            "process": list
-        }, {
-            "value": 'tags',
-            "default": True,
-            "default_value": [],
-            "process": Tag.list_to_o_tag_list
-        }])
-    @require_login
+    @Analyse.r(b=[
+        SentenceP.author,
+        SentenceP.reference,
+        P('sentences', '句子列表').process(list),
+        SentenceP.tags,
+    ])
+    @Auth.require_login
     def post(request):
         author = request.d.author
         reference = request.d.reference
         sentences = request.d.sentences
         tags = request.d.tags
-        o_user = request.user
+        user = request.user
 
         failure_list = []
         success_list = []
         failure_num = 0
         success_num = 0
         for sentence in sentences:
-            ret = Sentence.create(sentence, author, reference, tags, o_user)
-            if ret.error is not Error.OK:
+            try:
+                sentence = Sentence.create(sentence, author, reference, tags, user)
+                success_list.append(sentence.d())
+                success_num += 1
+            except Exception:
                 failure_list.append(sentence)
                 failure_num += 1
-            else:
-                o_sentence = ret.body
-                if not isinstance(o_sentence, Sentence):
-                    return error_response(Error.STRANGE)
-                success_list.append(o_sentence.to_dict())
-                success_num += 1
-        return response(body=dict(
+        return dict(
             failure_num=failure_num,
             success_num=success_num,
             failure_list=failure_list,
             success_list=success_list,
-        ))
+        )
 
     @staticmethod
-    @require_json
-    @require_put(['sid', {"value": 'tags', "process": Tag.list_to_o_tag_list}])
-    @require_login
+    @Analyse.r(b=[P('sid', '句子ID'), SentenceP.tags])
+    @Auth.require_login
     def put(request):
         sid = request.d.sid
         tags = request.d.tags
-        o_user = request.d.user
+        user = request.d.user
 
-        ret = Sentence.get_sentence_by_id(sid)
-        if ret.error is not Error.OK:
-            return error_response(ret)
-        o_sentence = ret.body
-        if not isinstance(o_sentence, Sentence):
-            return error_response(Error.STRANGE)
-
-        if o_sentence.owner != o_user:
-            return error_response(Error.NOT_BELONG, append_msg='，无法添加标签')
-        o_sentence.union_tags(tags)
-
-        return response()
+        sentence = Sentence.get_sentence_by_id(sid)
+        if sentence.owner != user:
+            raise SentenceError.NOT_BELONG('无法添加标签')
+        sentence.union_tags(tags)
 
 
 class TagView(View):
     @staticmethod
-    @require_get([{
-        "value": 'page',
-        "default": True,
-        "default_value": 0,
-        "process": int,
-    }, {
-        "value": 'count',
-        "default": True,
-        "default_value": 0,
-        "process": int,
-    }])
+    @Analyse.r(q=[
+        P('page', '页码').default(0).process(int),
+        P('count', '每页数目').default(0).process(int)
+    ])
     def get(request):
-        page = request.d.page
-        count = request.d.count
-        ret = Tag.get_tags(page, count)
-        if ret.error is not Error.OK:
-            return error_response(ret)
-        tags = ret.body
-        tag_list = [o_tag.to_dict() for o_tag in tags]
-        return response(body=tag_list)
+        tags = Tag.get_tags(**request.d.dict('page', 'count'))
+        return [o_tag.d() for o_tag in tags]
 
     @staticmethod
-    @require_post([{"value": 'tags', "process": list}])
-    @require_login
+    @Analyse.r(b=[P('tags', '标签列表').process(list)])
+    @Auth.require_login
     def post(request):
         tags = request.d.tags
 
@@ -148,20 +87,17 @@ class TagView(View):
         failure_num = 0
         success_num = 0
         for tag in tags:
-            ret = Tag.create(tag)
-            if ret.error is not Error.OK:
+            try:
+                tag = Tag.create(tag)
+                success_num += 1
+                success_list.append(tag.d())
+            except Exception:
                 failure_num += 1
                 failure_list.append(tag)
-            else:
-                o_tag = ret.body
-                if not isinstance(o_tag, Tag):
-                    return error_response(Error.STRANGE)
-                success_num += 1
-                success_list.append(o_tag.to_dict())
 
-        return response(body=dict(
+        return dict(
             failure_num=failure_num,
             success_num=success_num,
             failure_list=failure_list,
             success_list=success_list,
-        ))
+        )
