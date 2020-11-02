@@ -2,9 +2,10 @@
 
 用户API处理函数
 """
-from SmartDjango import Analyse
+from SmartDjango import Analyse, NetPacker
+from django.http import HttpResponse
 from django.views import View
-from smartify import P
+from smartify import P, PList
 
 from Base.auth import Auth
 from User.models import User, UserP
@@ -30,14 +31,21 @@ class UserView(View):
         """
         user = User.create(**request.d.dict())
 
-        return Auth.get_login_token(user)
+        # return Auth.get_login_token(user)
+        data = Auth.get_login_token(user)
+        response = NetPacker.send(data)
+        response.set_cookie('token', data['token'])
+        return response
+
+    xxx = P()
 
     @staticmethod
-    @Analyse.r(b={
+    @Analyse.r(b=[
+        xxx,
         UserP.password.clone().default(None),
         UserP.password.clone().rename('old_password').default(None),
         P('nickname', '昵称').default(None)  # 教学示范
-    })
+    ])
     @Auth.require_login
     def put(request):
         """ PUT /api/user/
@@ -70,7 +78,10 @@ class UsernameView(View):
         return user.d()
 
     @staticmethod
-    @Analyse.r(a=[UserP.username])
+    @Analyse.r(a=[UserP.username], b=[
+        PList(name='targetsrcs', read_name='xxx').set_child(
+            P('targetsrc').process(lambda x: x in ['qq', 'netease', 'baidu']))
+    ])
     @Auth.require_root
     def delete(request):
         """ DELETE /api/user/@:username
@@ -91,4 +102,8 @@ class TokenView(View):
         登录获取token
         """
         user = User.authenticate(**request.d.dict())
-        return Auth.get_login_token(user)
+
+        data = Auth.get_login_token(user)
+        response = NetPacker.send(data)
+        response.set_cookie('token', data['token'])
+        return response

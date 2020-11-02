@@ -1,6 +1,7 @@
 from SmartDjango import Analyse, P
 from django.views import View
 
+from Agent.models import Agent
 from Base.auth import Auth
 from Sentence.models import Sentence, Tag, SentenceP, SentenceError
 
@@ -15,6 +16,7 @@ class SentenceView(View):
         SentenceP.reference,
     ])
     def get(request):
+        Agent.get_or_create(request.META['HTTP_USER_AGENT'])
         sentence = Sentence.get_random_sentence(**request.d.dict())
         return sentence.d()
 

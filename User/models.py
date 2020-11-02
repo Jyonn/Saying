@@ -7,6 +7,7 @@ import string
 
 from SmartDjango import models, E
 from django.utils.crypto import get_random_string
+from smartify import P
 
 
 @E.register()
@@ -35,20 +36,39 @@ class User(models.Model):
         blank=True,
         null=True,
         default=None,
+        verbose_name='用户名'
     )
+
     password = models.CharField(
         max_length=32,
         min_length=6,
+        verbose_name='密码'
     )
+
     salt = models.CharField(
         max_length=10,
         default=None,
     )
+
     pwd_change_time = models.FloatField(
         null=True,
         blank=True,
         default=0,
     )
+
+    inviter = models.ForeignKey(
+        'User.User',
+        on_delete=models.CASCADE,
+        default=None,
+        null=True,
+    )
+
+    def is_ancestor(self, user: 'User'):
+        while user:
+            if self == user:
+                return True
+            user = user.inviter
+        return False
 
     @staticmethod
     def _valid_username(username):
@@ -87,10 +107,7 @@ class User(models.Model):
 
         :param username: 用户名
         :param password: 密码
-        :return: Ret对象，错误返回错误代码，成功返回用户对象
         """
-        cls.validator(locals())
-
         salt, hashed_password = User.hash_password(password)
 
         User.exist_with_username(username)
@@ -100,6 +117,7 @@ class User(models.Model):
                 username=username,
                 password=hashed_password,
                 salt=salt,
+                inviter=None,
             )
             user.save()
         except Exception:
@@ -157,12 +175,34 @@ class User(models.Model):
             return user
         raise UserError.PASSWORD
 
+    def _readable_inviter(self):
+        if self.inviter:
+            return self.inviter.d_base()
+
     def d(self):
-        return dict(
-            uid=self.pk,
-            username=self.username,
-        )
+        return self.dictor('pk->uid', 'username', 'inviter')
+
+    def d_base(self):
+        return self.dictor('pk->uid', 'username')
 
 
 class UserP:
     username, password = User.get_params('username', 'password')
+
+    # username_getter = username.clone().rename(
+    #     'username', yield_name='user', stay_origin=True).process(User.get_user_by_username)
+
+    username_getter = P('username', yield_name='user').process(User.get_user_by_username)
+
+
+def validate_x(func):
+    def validate(x):
+        if isinstance(x, int) or isinstance(x, float):
+            return func(x)
+        return None
+    return validate
+
+
+@validate_x
+def square(x):
+    return x * x

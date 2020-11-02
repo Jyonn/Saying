@@ -57,7 +57,7 @@ class Sentence(models.Model):
             raise SentenceError.ERROR_CREATE_SENTENCE
         return sentence
 
-    def readable_tags(self):
+    def _readable_tags(self):
         tags = self.tags.all()
         return [tag.d() for tag in tags]
 
@@ -69,20 +69,20 @@ class Sentence(models.Model):
         sentences = cls.objects.search(author=author, reference=reference)
 
         filtered_sentences = []
-        for o_sentence in sentences:
+        for sentence in sentences:
             satisfied = True
-            for o_tag in tags:
-                if o_tag not in o_sentence.tags:
+            for tag in tags:
+                if tag not in sentence.tags:
                     satisfied = False
                     break
             if not satisfied:
                 continue
             if consider_author:
-                if len(o_sentence.author) + len(o_sentence.sentence) < max_length or max_length == 0:
-                    filtered_sentences.append(o_sentence)
+                if len(sentence.author) + len(sentence.sentence) < max_length or max_length == 0:
+                    filtered_sentences.append(sentence)
             else:
-                if len(o_sentence.sentence) < max_length or max_length == 0:
-                    filtered_sentences.append(o_sentence)
+                if len(sentence.sentence) < max_length or max_length == 0:
+                    filtered_sentences.append(sentence)
         if not filtered_sentences:
             raise SentenceError.NO_MATCHED_SENTENCE
         index = random.randint(0, len(filtered_sentences) - 1)
@@ -159,8 +159,8 @@ class Tag(models.Model):
 
 
 class SentenceP:
-    sentence, author, reference= Sentence.get_params(
+    sentence, author, reference = Sentence.get_params(
         'sentence', 'author', 'reference')
 
-    tags = P('tags', '链接列表')
+    tags = P('tags', '链接列表').default([])
     tags.process(Tag.list_to_tag_list)
