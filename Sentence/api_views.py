@@ -16,7 +16,15 @@ class SentenceView(View):
         SentenceP.reference,
     ])
     def get(request):
-        Agent.get_or_create(request.META['HTTP_USER_AGENT'])
+        agent = Agent.get_or_create(request.META['HTTP_USER_AGENT'])
+        if agent.share_times > 0:
+            agent.share_times -= 1
+            agent.save()
+            return dict(
+                sentence=agent.sentence_to_share,
+                author=agent.share_author,
+                reference=agent.share_reference,
+            )
         sentence = Sentence.get_random_sentence(**request.d.dict())
         return sentence.d()
 

@@ -23,6 +23,28 @@ class Agent(models.Model):
 
     visit_times = models.IntegerField()
 
+    sentence_to_share = models.CharField(
+        max_length=128,
+        null=True,
+        blank=True,
+    )
+
+    share_author = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+    )
+
+    share_reference = models.CharField(
+        max_length=20,
+        null=True,
+        blank=True,
+    )
+
+    share_times = models.IntegerField(
+        default=0,
+    )
+
     @classmethod
     def get(cls, agent_key):
         try:
